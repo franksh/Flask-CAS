@@ -112,7 +112,15 @@ def validate(ticket):
     isValid = False
 
     try:
-        xmldump = urlopen(cas_validate_url).read().strip().decode('utf8', 'ignore')
+        # Workaround to mitigate "SSL_CERTIFICATE ERROR"
+        # See https://github.com/cameronbwhite/Flask-CAS/issues/50
+        # Original:
+        # xmldump = urlopen(cas_validate_url).read().strip().decode('utf8', 'ignore')
+        # Modified:
+        import ssl
+        context = ssl._create_unverified_context()
+        xmldump = urlopen(cas_validate_url, context=context).read().strip().decode('utf8', 'ignore')
+
         xml_from_dict = parse(xmldump)
         isValid = True if "cas:authenticationSuccess" in xml_from_dict["cas:serviceResponse"] else False
     except ValueError:
@@ -125,9 +133,11 @@ def validate(ticket):
         attributes = xml_from_dict.get("cas:attributes", {})
 
         if "cas:memberOf" in attributes:
-            attributes["cas:memberOf"] = attributes["cas:memberOf"].lstrip('[').rstrip(']').split(',')
+            attributes["cas:memberOf"] = attributes["cas:memberOf"].lstrip(
+                '[').rstrip(']').split(',')
             for group_number in range(0, len(attributes['cas:memberOf'])):
-                attributes['cas:memberOf'][group_number] = attributes['cas:memberOf'][group_number].lstrip(' ').rstrip(' ')
+                attributes['cas:memberOf'][group_number] = attributes['cas:memberOf'][group_number].lstrip(
+                    ' ').rstrip(' ')
 
         flask.session[cas_username_session_key] = username
         flask.session[cas_attributes_session_key] = attributes
